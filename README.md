@@ -1,4 +1,4 @@
-
+<h1>Display library ver 1.0 </h1>
 <h2>Overview </h2>
 Stm32 library for TFT display with ST7735S chip. Project beasd on Hardware Agnostic Graphics Library (https://github.com/tuupola/hagl/tree/master) and Forbot stm32 course (https://forbot.pl/blog/kurs-stm32l4-kolorowy-wyswietlacz-tft-spi-id48620). Library have few additional options and functions.
 
