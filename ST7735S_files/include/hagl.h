@@ -44,10 +44,11 @@ extern "C" {
 
 #include "../../ST7735S_files/include/hagl_hal.h"
 #include "../../ST7735S_files/include/bitmap.h"
+#include "../../ST7735S_files/include/fontx.h"
 
 #define ABS(x)  ((x) > 0 ? (x) : -(x))
 
-#define HAGL_CHAR_BUFFER_SIZE    (16 * 16 * DISPLAY_DEPTH / 2)
+#define HAGL_CHAR_BUFFER_SIZE    (4096)
 
 #define HAGL_OK                  (0)
 #define HAGL_ERR_GENERAL         (1)
@@ -58,6 +59,13 @@ extern "C" {
 #define ROTATION_LEFT 1
 #define ROTATION_RIGHT 2
 #define ROTATION_FLIP 3
+#define ROTATION_MAX ROTATION_FLIP
+
+typedef struct{
+    uint8_t x0;
+    uint8_t y0;
+} screen_coodrinates_t;
+
 /**
  * Put a single pixel
  *
@@ -80,12 +88,22 @@ void hagl_put_pixel(int16_t x0, int16_t y0, color_t color);
 color_t hagl_get_pixel(int16_t x0, int16_t y0);
 
 /**
+ * Rotate bitmap with letter.
+ *
+ * @param [in/out] bitmap: pointer to bitmap bitmap_t struct.
+ * @param [in] buffer: pointer to color_t type buffer pointer.
+ * @param [in] fontData: pointer to font_data_t struct.
+ * @param [in] rotation: choosen type of rotation.
+ * @return void
+ */
+void roateLetter(screen_coodrinates_t* coordinates_p,
+					 bitmap_t* bitmap,
+					 color_t* buffer,
+					 font_data_t* fontData,
+					 uint8_t rotation);
+
+/**
  * Draw a single character
- *
- * Output will be clipped to the current clip window. Library itself
- * includes only a couple of fonts. You can find more fonts at:
- *
- * https://github.com/tuupola/fonts
  *
  * @param code  unicode code point
  * @param x0
@@ -93,24 +111,17 @@ color_t hagl_get_pixel(int16_t x0, int16_t y0);
  * @param color
  * @param font  pointer to a FONTX font
  * @param rotation: text rotation
- * @param scale: text size scalar
  * @return width of the drawn character
  */
-uint8_t hagl_put_char(wchar_t code,
+uint8_t hagl_put_char(const char code,
 					  int16_t x0,
 					  int16_t y0,
 					  color_t color,
-					  const unsigned char *font,
-					  uint8_t rotation,
-					  uint8_t scale);
+					  const uint16_t *font,
+					  uint8_t rotation);
 
 /**
  * Draw a string
- *
- * Output will be clipped to the current clip window. Library itself
- * includes only a couple of fonts. You can find more fonts at:
- *
- * https://github.com/tuupola/fonts
  *
  * @param str pointer to an wide char string
  * @param x0
@@ -118,30 +129,15 @@ uint8_t hagl_put_char(wchar_t code,
  * @param color
  * @param font pointer to a FONTX font
  * @param rotation: text rotation
- * @param scale: text size scalar
  * @return width of the drawn string
  */
-uint16_t hagl_put_text(const wchar_t *str,
+int16_t hagl_put_text(const char *str,
 					   int16_t x0,
 					   int16_t y0,
 					   color_t color,
-					   const unsigned char *font,
-					   uint8_t rotation,
-					   uint8_t scale);
+					   const uint16_t *font,
+					   uint8_t rotation);
 
-/**
- * Extract a glyph into a bitmap
- *
- * This can be used for example for extracting game sprites from fontsets
- * such as UNSCII.
- *
- * @param code Unicode code point
- * @param color
- * @param bitmap Pointer to a bitmap
- * @param font Pointer to a FONTX font
- * @return Width of the drawn string
- */
-uint8_t hagl_get_glyph(wchar_t code, color_t color, bitmap_t *bitmap, const uint8_t *font);
 
 /**
  * Blit a bitmap to the display

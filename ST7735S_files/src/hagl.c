@@ -300,47 +300,11 @@ void hagl_fill_rectangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, color_t
     }
 }
 
-uint8_t hagl_get_glyph(wchar_t code, color_t color, bitmap_t *bitmap, const uint8_t *font)
-{
-    uint8_t status, set;
-    fontx_glyph_t glyph;
-
-    status = fontx_glyph(&glyph, code, font);
-
-    if (0 != status) {
-        return status;
-    }
-
-    /* Initialise bitmap dimensions. */
-    bitmap->depth = DISPLAY_DEPTH,
-    bitmap->width = glyph.width,
-    bitmap->height = glyph.height,
-    bitmap->pitch = bitmap->width * (bitmap->depth / 8);
-    bitmap->size = bitmap->pitch * bitmap->height;
-
-    color_t *ptr = (color_t *) bitmap->buffer;
-
-    for (uint8_t y = 0; y < glyph.height; y++) {
-        for (uint8_t x = 0; x < glyph.width; x++) {
-            set = *(glyph.buffer) & (0x80 >> (x % 8));
-            if (set) {
-                *(ptr++) = color;
-            } else {
-                *(ptr++) = 0x0000;
-            }
-        }
-        glyph.buffer += glyph.pitch;
-    }
-
-    return 0;
-}void
-
-tmpfunc(color_t *buffer, color_t* bufferTmp)
-{
-	memcpy(buffer, bufferTmp, HAGL_CHAR_BUFFER_SIZE * sizeof(color_t));
-}
-
-void roateLetter(bitmap_t* bitmap, color_t* buffer, fontx_glyph_t* glyph, uint8_t rotation)
+void roateLetter(screen_coodrinates_t* coordinates_p,
+					 bitmap_t* bitmap,
+					 color_t* buffer,
+					 font_data_t* fontData,
+					 uint8_t rotation)
 {
 
 	color_t bufferTmp[HAGL_CHAR_BUFFER_SIZE];
@@ -348,31 +312,30 @@ void roateLetter(bitmap_t* bitmap, color_t* buffer, fontx_glyph_t* glyph, uint8_
 
 	int a = 0;
 	int b = 0;
-	for (uint8_t y = 0; y < glyph->height; y++)
+	if (rotation == ROTATION_LEFT || rotation == ROTATION_RIGHT)
 	{
-		for (uint8_t x = 0; x < glyph->width; x++)
+		bitmap->width = fontData->height;
+		bitmap->height = fontData->charWidth;
+	}
+
+	for (uint8_t x = 0; x < fontData->charWidth; x++)
+	{
+		for (uint8_t y = 0; y < fontData->height; y++)
 		{
         	switch (rotation)
 			{
 			case ROTATION_LEFT:
-				a = (y * glyph->width) + x;
-				b = (glyph->height * (glyph->width - x)) - (glyph->height - y - 1) - 1;
-				bitmap->width = glyph->height;
-				bitmap->height = glyph->width;
+				a = (x * fontData->height) + y;
+				b = ((y + 1) * fontData->charWidth) - (x + 1);
 				break;
 			case ROTATION_RIGHT:
-				a = (y * glyph->width) + x;
-				b = ((x * glyph->height) + glyph->height) - (y + 1);
-				bitmap->width = glyph->height;
-				bitmap->height = glyph->width;
+				a = (x * fontData->height) + y;
+				b = (fontData->charWidth * (fontData->height - y)) - (fontData->charWidth - x);
 				break;
 			case ROTATION_FLIP:
-				/*
-				a = (y * glyph->width) + x;
-				b = glyph->width * (glyph->height - y) - (glyph->width - x);
-				*/
-				a = (y * glyph->width) + x;
-				b = (glyph->width * glyph->height - 1) - a;
+
+				a = (y * fontData->charWidth) + x;
+				b = (fontData->charWidth * fontData->height - 1) - a;
 				break;
 			default:
 			}
@@ -383,116 +346,146 @@ void roateLetter(bitmap_t* bitmap, color_t* buffer, fontx_glyph_t* glyph, uint8_
 
 	memcpy(buffer, &bufferTmp, HAGL_CHAR_BUFFER_SIZE * sizeof(color_t));
 
-
+	/*
+	if (rotation == ROTATION_FLIP)
+	{
+		coordinates_p->x0 -= bitmap->width;
+		coordinates_p->y0 -= bitmap->height;
+	}
+	else if (rotation == ROTATION_LEFT)
+	{
+		coordinates_p->y0 -= bitmap->height;
+	}
+	*/
+	switch (rotation)
+	{
+	case ROTATION_LEFT:
+		coordinates_p->y0 -= bitmap->height;
+		break;
+	case ROTATION_RIGHT:
+		coordinates_p->x0 -= bitmap->width;
+		break;
+	case ROTATION_FLIP:
+		coordinates_p->x0 -= bitmap->width;
+		coordinates_p->y0 -= bitmap->height;
+		break;
+	default:
+	}
 }
 
-uint8_t hagl_put_char(wchar_t code,
+
+uint8_t hagl_put_char(const char code,
 					  int16_t x0,
 					  int16_t y0,
 					  color_t color,
-					  const uint8_t *font,
-					  uint8_t rotation,
-					  uint8_t scale)
+					  const uint16_t *font,
+					  uint8_t rotation)
 {
-    uint8_t set, status;
+    uint8_t set;
     color_t buffer[HAGL_CHAR_BUFFER_SIZE];
     bitmap_t bitmap;
-    fontx_glyph_t glyph;
+    font_data_t fontData;
+    screen_coodrinates_t coordinates;
 
-    status = fontx_glyph(&glyph, code, font);
+    coordinates.x0 = x0;
+    coordinates.y0 = y0;
 
-    if (0 != status) {
+    if ((get_font_data(&fontData, code, font) > HAGL_CHAR_BUFFER_SIZE) ||
+        (rotation > ROTATION_MAX))
+    {
         return 0;
     }
 
-    bitmap.width = glyph.width,
-    bitmap.height = glyph.height,
+    bitmap.width = fontData.charWidth,
+    bitmap.height = fontData.height,
     bitmap.depth = DISPLAY_DEPTH,
 
     bitmap_init(&bitmap, (uint8_t *)buffer);
 
     color_t *ptr = (color_t *) bitmap.buffer;
+    uint16_t iterator = 0;
 
-    for (uint8_t y = 0; y < glyph.height; y++) {
-        for (uint8_t x = 0; x < glyph.width; x++) {
-            set = *(glyph.buffer) & (0x80 >> (x % 8));
-            if (set) {
-                *(ptr++) = color;
-            } else {
-                *(ptr++) = 0x0000;
-            }
-        }
-        glyph.buffer += glyph.pitch;
-    }
+	for (uint8_t x = 0; x < fontData.charWidth; x++)
+	{
+		for (uint8_t y = 0; y < fontData.height; y++)
+		{
+			if(y%8==0 && y != 0)
+			{
+				fontData.buffer++;
+				iterator++;
+			}
+			set = *(fontData.buffer) & (0x01 << (y % 8));
+			if (set && iterator < fontData.wordsPerChar)
+			{
+				*(ptr++) = color;
+			} else
+			{
+				*(ptr++) = 0x0000;
+			}
+		}
+		fontData.buffer++;
+		iterator++;
+	}
 
-    //WC START
     if(rotation)
     {
-    	roateLetter(&bitmap, buffer, &glyph, rotation);
-    }
-    //WC END
-    if(scale > 1)
-    {
-    	hagl_scale_blit(x0, y0, bitmap.width * scale, bitmap.height * scale, &bitmap);
-    }
-    else
-    {
-    	hagl_blit(x0, y0, &bitmap);
+    	roateLetter(&coordinates, &bitmap, buffer, &fontData, rotation);
     }
 
-    return (glyph.width * scale); // from bitmal. to  glyph change
+    hagl_blit(coordinates.x0, coordinates.y0, &bitmap);
+
+
+    return (fontData.charWidth);
 }
 
 /*
  * Write a string of text by calling hagl_put_char() repeadetly. CR and LF
  * continue from the next line.
  */
-
-
-
-uint16_t hagl_put_text(const wchar_t 	   *str,
+int16_t hagl_put_text(const char 	        *str,
 					   int16_t		  		x0,
 					   int16_t 		  		y0,
 					   color_t 				color,
-					   const unsigned char *font,
-					   uint8_t 				rotation,
-					   uint8_t				scale)
+					   const uint16_t 		*font,
+					   uint8_t 				rotation)
 {
-    wchar_t temp;
-    uint8_t status;
-    uint16_t originalX = x0;
-    uint16_t originalY = y0;
-    fontx_meta_t meta;
+    font_demensions_t fontDemensions;
 
-    status = fontx_meta(&meta, font);
-    if (0 != status) {
+    if ((get_font_dimensions(&fontDemensions, font) > HAGL_CHAR_BUFFER_SIZE) ||
+    	(rotation > ROTATION_MAX))
+    {
         return 0;
     }
 
-    do {
-        temp = *str++;
-        if (13 == temp || 10 == temp)
+    uint16_t originalX = x0;
+    uint16_t originalY = y0;
+    uint8_t textLen = strlen(str);
+
+    for(int i = 0; i < textLen; i++, *str++)
+    {
+        if (*str == '\n' || *str == '\r')
         {
         	switch (rotation)
 			{
 			case ROTATION_NONE:
 	            x0 = originalX;
-	            y0 += meta.height * scale;
+	            y0 += fontDemensions.height;
 				break;
 			case ROTATION_LEFT:
 	            y0 = originalY;
-	            x0 += meta.height * scale;
+	            x0 += fontDemensions.height;
 				break;
 			case ROTATION_RIGHT:
 	            y0 = originalY;
-	            x0 -= meta.height * scale;
+	            x0 -= fontDemensions.height;
 				break;
 			case ROTATION_FLIP:
 	            x0 = originalX;
-	            y0 -= meta.height * scale;
+	            y0 -= fontDemensions.height;
 				break;
 			default:
-				//y0 += hagl_put_char(temp, x0, y0, color, font, rotation); //WC x to y change
+	            x0 = originalX;
+	            y0 += fontDemensions.height;
 			}
         }
         else
@@ -500,24 +493,22 @@ uint16_t hagl_put_text(const wchar_t 	   *str,
         	switch (rotation)
 			{
         	case ROTATION_NONE:
-        		x0 += hagl_put_char(temp, x0, y0, color, font, rotation, scale);
+        		x0 += hagl_put_char(*str, x0, y0, color, font, rotation);
         		break;
         	case ROTATION_LEFT:
-        		y0 -= hagl_put_char(temp, x0, y0, color, font, rotation, scale);
+        		y0 -= hagl_put_char(*str, x0, y0, color, font, rotation);
         		break;
         	case ROTATION_RIGHT:
-        		y0 += hagl_put_char(temp, x0, y0, color, font, rotation, scale);
+        		y0 += hagl_put_char(*str, x0, y0, color, font, rotation);
         		break;
         	case ROTATION_FLIP:
-        		x0 -= hagl_put_char(temp, x0, y0, color, font, rotation, scale);
+        		x0 -= hagl_put_char(*str, x0, y0, color, font, rotation);
         		break;
         	default:
-        		//y0 += hagl_put_char(temp, x0, y0, color, font, rotation); //WC x to y change
+        		x0 += hagl_put_char(*str, x0, y0, color, font, rotation);
 			}
-
         }
-    } while (*str != 0);
-
+    }
     return x0 - originalX;
 }
 
@@ -526,7 +517,6 @@ uint16_t hagl_put_text(const wchar_t 	   *str,
  * parameter is left out intentionally to keep the API simpler. If you need
  * configurable source and destination see the file blit.c.
  *
- * TODO: Handle transparency.
  */
 
 void hagl_blit(int16_t x0, int16_t y0, bitmap_t *source) {
@@ -555,10 +545,10 @@ void hagl_blit(int16_t x0, int16_t y0, bitmap_t *source) {
 #else
     color_t color;
     color_t *ptr = (color_t *) source->buffer;
-
-    for (uint16_t y = 0; y < source->height; y++) {
-        for (uint16_t x = 0; x < source->width; x++) {
+    for (uint16_t x = 0; x < source->width; x++) {
+    	for (uint16_t y = 0; y < source->height; y++) {
             color = *(ptr++);
+
             if(color)
             {
             	hagl_put_pixel(x0 + x, y0 + y, color);

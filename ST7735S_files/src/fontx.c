@@ -43,64 +43,34 @@ SPDX-License-Identifier: MIT
 #include <string.h>
 
 
-uint8_t fontx_meta(fontx_meta_t *meta, const uint8_t *font) {
+uint16_t get_font_dimensions(font_demensions_t *fontDemensions, const uint16_t *font)
+{
+	fontDemensions->width = font[FONTX_WIDTH];
+	fontDemensions->height = font[FONTX_HEIGHT];
 
-    memcpy(meta->name, &font[FONTX_NAME], 8);
-    meta->width = font[FONTX_WIDTH];
-    meta->height = font[FONTX_HEIGHT];
-    meta->type = font[FONTX_TYPE];
-
-    return 0;
+    return (fontDemensions->width * fontDemensions->height);
 }
 
 
-uint8_t fontx_glyph(fontx_glyph_t *glyph, wchar_t code, const uint8_t* font) {
-    uint32_t nc, bc, sb, eb;
-    uint8_t status;
-    const uint8_t *block_table;
-    fontx_meta_t meta;
 
-    status = fontx_meta(&meta, font);
-    if (0 != status) {
-        return status;
-    }
+uint16_t get_font_data(font_data_t *fontData, uint8_t code, const uint16_t* font)
+{
+	fontData->width = font[0];
+	fontData->height = font[1];
 
-    glyph->width = meta.width;
-    glyph->height = meta.height;
-    glyph->pitch = (meta.width + 7) / 8;
-    glyph->size = glyph->pitch * meta.height;
+	uint16_t firstCharNumber = font[2];
+	uint16_t numberOfChars = font[3];
+	uint16_t charDataAddr = BASIC_FONT_DATA_FIELDS + (code - firstCharNumber) * BASIC_CHAR_DATA_FIELDS;
+	uint16_t charBitfieldAddr = (((uint16_t)font[charDataAddr] << 8) | font[charDataAddr + 1]) +
+								(numberOfChars * BASIC_CHAR_DATA_FIELDS) + BASIC_FONT_DATA_FIELDS;
 
-    if (FONTX_TYPE_SBCS == meta.type) {
-        if (code < 0x100) {
-            glyph->buffer = &font[FONTX_GLYPH_DATA_START + code * glyph->size];
-            return FONTX_OK;
-        }
-    } else {
-        block_table = &font[FONTX_BLOCK_TABLE_START];
-        nc = 0;
-        bc = font[FONTX_BLOCK_TABLE_SIZE];
-        while (bc--) {
-            /* Get range of the code block_table. */
-            sb = block_table[0] + block_table[1] * 0x100;
-            eb = block_table[2] + block_table[3] * 0x100;
+	fontData->buffer = &font[charBitfieldAddr];
 
-             /* Check if in the code block_table. */
-            if (code >= sb && code <= eb) {
-                /* Number of codes from top of the block_table. */
-                nc += code - sb;
-                glyph->buffer = &font[
-                    FONTX_BLOCK_TABLE_START +
-                    4 * font[FONTX_BLOCK_TABLE_SIZE] +
-                    nc * glyph->size
-                ];
-                return FONTX_OK;
-            }
-            /* Number of codes in the previous block_tables. */
-            nc += eb - sb + 1;
-            /* Next code block_table. */
-            block_table += 4;
-        }
-    }
+	fontData->wordsPerChar = font[charDataAddr + CHAR_BITMAP_FIELDS_OFFSET];
+	fontData->charWidth = font[charDataAddr + CHAR_WIDTH_OFFSET];
 
-    return FONTX_ERR_GLYPH_NOT_FOUND;
+	fontData->pitch = (fontData->width + 7) / 8;
+	fontData->size = fontData->pitch * fontData->height;
+
+	return (fontData->width * fontData->height);
 }

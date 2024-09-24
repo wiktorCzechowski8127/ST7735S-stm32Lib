@@ -137,9 +137,9 @@ uint8_t lcd_is_busy(void)
 		return 0;
 }
 
-void lcd_init(SPI_HandleTypeDef* spiData)
+void lcd_init(SPI_HandleTypeDef* spiHandler)
 {
-  lcdSpiData = spiData;
+  lcdSpiData = spiHandler;
   HAL_GPIO_WritePin(LCD_RST_GPIO_Port, LCD_RST_Pin, GPIO_PIN_RESET);
   HAL_Delay(100);
   HAL_GPIO_WritePin(LCD_RST_GPIO_Port, LCD_RST_Pin, GPIO_PIN_SET);

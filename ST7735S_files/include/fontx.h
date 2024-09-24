@@ -44,37 +44,67 @@ extern "C" {
 
 #define FONTX_OK                   (0)
 #define FONTX_ERR_GLYPH_NOT_FOUND  (1)
-#define FONTX_NAME                 (6)
-#define FONTX_WIDTH               (14)
-#define FONTX_HEIGHT              (15)
-#define FONTX_TYPE                (16)
+#define FONTX_NAME                 (6) //WC: none used
+#define FONTX_WIDTH               (0) //0
+#define FONTX_HEIGHT              (1) //1
+#define FONTX_TYPE                (16) //WC: none used
 #define FONTX_TYPE_SBCS            (0)
 #define FONTX_TYPE_DBCS            (1)
 #define FONTX_GLYPH_DATA_START    (17)
 #define FONTX_BLOCK_TABLE_SIZE    (17)
 #define FONTX_BLOCK_TABLE_START   (18)
 
+#define BASIC_FONT_DATA_FIELDS 4
+#define BASIC_CHAR_DATA_FIELDS 4
+#define CHAR_BITMAP_FIELDS_OFFSET 2
+#define CHAR_WIDTH_OFFSET 3
+
 #include <stdint.h>
 #include <stddef.h>
 
 /* Pitch is bytes per row. Size is size in bytes. */
+
 typedef struct{
-    uint8_t width;
-    uint8_t height;
     uint8_t size;
     uint8_t pitch;
-    const uint8_t *buffer;
-} fontx_glyph_t;
+
+	uint16_t width;
+	uint16_t height;
+	uint16_t firstChar;
+	uint16_t numbersOfChar;
+
+	uint16_t addr;
+	uint16_t wordsPerChar;
+	uint16_t charWidth;
+
+    const uint16_t *buffer;
+}font_data_t;
+
 
 typedef struct{
-    char name[9];
     uint8_t width;
     uint8_t height;
-    uint8_t type;
-} fontx_meta_t;
+} font_demensions_t;
 
-uint8_t fontx_meta(fontx_meta_t *meta, const uint8_t *font);
-uint8_t fontx_glyph(fontx_glyph_t *glyph, wchar_t code, const uint8_t *font);
+
+/**
+ * Fill font_demensions_t struct with choosen with width and height of choosen font.
+ *
+ * @param fontDemensions [in/out] pointer font_demensions_t struct.
+ * @param font [in] pointer to file with font.
+ * @return Maximum area of ​​the single character.
+ */
+uint16_t get_font_dimensions(font_demensions_t *fontDemensions, const uint16_t *font);
+
+/**
+ * Fill font_demensions_t struct with choosen with width and height of choosen font.
+ *
+ * @param fontDemensions [in/out] pointer font_demensions_t struct.
+ * @param code [in] current character code.
+ * @param font [in] pointer to file with font.
+ * @return Maximum area of ​​the single character.
+ */
+uint16_t get_font_data(font_data_t *fontData, uint8_t code, const uint16_t *font);
 
 #ifdef __cplusplus
 }
